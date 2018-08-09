@@ -1,0 +1,464 @@
+<!doctype HTML>
+<html>
+<head>
+<title>Flight Sim</title>
+<style>
+canvas{
+position:relative;
+}
+#can0{
+border:2px solid #333;
+}
+#can1{
+position:absolute;
+z-index:-1;
+}
+#can2{
+bottom:100px;
+}
+table{
+position:absolute;
+font-family: menlo, sans-serif;
+color:#0f0;
+}
+</style>
+</head>
+<body bgcolor="#000000" onload="init()">
+<canvas height="600" width="1000" id="can0" onclick=""></canvas><br>
+<canvas height="200" width="200" id="can1"></canvas>
+<canvas height="200" width="200" id="can1_1"></canvas>
+<canvas height="100" width="200" id="can2"></canvas>
+<!--<table>
+<tr><td>Speed</td><td id="display_spd"></td></tr>
+<tr><td>Altitude</td><td id="display_alt"></td></tr>
+<tr></tr>
+</table>-->
+<span id="display"></span>
+<script type="text/javascript">
+var can,can1,can1_1,can2;
+var ctx,attitude,attoverlay,compass;
+var points=[];
+var block=[];
+var key={up:false,down:false,left:false,right:false,space:false,a:false,s:false,w:false,z:false};
+
+var physics=false;
+
+var fps=20;
+var renderdist=1000;
+var attitudefov=Math.PI/3;
+
+
+var eye={x:0,y:10,z:2,speed:0,
+xang:0,yang:0,zang:0,
+xangvel:0,yangvel:0,zangvel:0,
+move(){
+	this.xang+=this.xangvel;
+	this.yang+=this.yangvel;
+	this.zang+=this.zangvel;
+	this.xang=anglemod(this.xang);
+	this.yang=anglemod(this.yang);
+	this.zang=anglemod(this.zang);
+	this.x+=this.speed*Math.sin(this.yang)*Math.cos(this.xang);
+	this.y+=this.speed*Math.sin(this.xang);
+	this.z+=this.speed*Math.cos(this.yang)*Math.cos(this.xang);
+},
+slowangles(){
+	this.xangvel>=0?
+	this.xangvel-=Math.min(0.001, this.xangvel):
+	this.xangvel+=Math.max(0.001, this.xangvel);
+	this.yangvel>=0?
+	this.yangvel-=Math.min(0.001, this.yangvel):
+	this.yangvel+=Math.max(0.001, this.yangvel);
+	this.zangvel>=0?
+	this.zangvel-=Math.min(0.001, this.zangvel):
+	this.zangvel+=Math.max(0.001, this.zangvel);
+}
+};
+var zoom=400;
+var MX,MY;
+
+
+var diag=[];
+
+function anglemod(a){//returns angle between -pi and pi
+return((a+Math.PI)%(2*Math.PI)-Math.PI*Math.sign(a+Math.PI));
+}
+function updateAttitude(){
+	attitude.clearRect(0,0,200,200);
+	var p=[];
+	if(Math.abs(eye.zang)<Math.PI/4){
+		p=[[0,0],
+		[200,0],
+		[200,Math.sin(eye.xang)*200/attitudefov+100+Math.tan(eye.zang)*100],
+		[0,Math.sin(eye.xang)*200/attitudefov+100-Math.tan(eye.zang)*100]];
+	}else if(Math.abs(eye.zang)>3*Math.PI/4){
+		p=[[200,200],
+		[0,200],
+		[0,-Math.sin(eye.xang)*200/attitudefov+100-Math.tan(eye.zang)*100],
+		[200,-Math.sin(eye.xang)*200/attitudefov+100+Math.tan(eye.zang)*100]];
+	}else if(eye.zang<0){
+		p=[[100+Math.sin(eye.xang)*200/attitudefov-1/Math.tan(eye.zang)*100,0],
+		[0,0],
+		[0,200],
+		[100+Math.sin(eye.xang)*200/attitudefov+1/Math.tan(eye.zang)*100,200]]
+	}else{
+		p=[[100-Math.sin(eye.xang)*200/attitudefov-1/Math.tan(eye.zang)*100,0],
+		[200,0],
+		[200,200],
+		[100-Math.sin(eye.xang)*200/attitudefov+1/Math.tan(eye.zang)*100,200]]
+	}
+
+	attitude.fillStyle="#6d5533";
+	attitude.fillRect(0,0,200,200);
+	attitude.fillStyle="#3571e3";
+	attitude.beginPath();
+	if(Math.abs(eye.xang)<Math.PI/2){
+		attitude.moveTo(p[0][0],p[0][1]);
+		attitude.lineTo(p[1][0],p[1][1]);
+		attitude.lineTo(p[2][0],p[2][1]);
+		attitude.lineTo(p[3][0],p[3][1]);
+	}else{
+		attitude.moveTo(200-p[0][0],200-p[0][1]);
+		attitude.lineTo(200-p[1][0],200-p[1][1]);
+		attitude.lineTo(200-p[2][0],200-p[2][1]);
+		attitude.lineTo(200-p[3][0],200-p[3][1]);
+	}
+	attitude.closePath();
+	attitude.fill();
+
+	
+}
+var offset;
+function updateCompass(){
+	var degrees=eye.yang*180/Math.PI;
+	compass.fillStyle="#000000"
+	compass.fillRect(0,0,200,100);
+	compass.strokeStyle="#ffffff";
+	compass.fillStyle="#ffffff"
+	offset=10*(degrees%2+2);
+	for(var i=0;i<25;i++){
+		compass.fillRect(10*i-offset-1,80,2,-30+10*(i%2));
+	}
+
+
+	if(degrees<0){
+	compass.fillText(10*Math.round(degrees/10)-10,-10*((degrees-5)%10+5),40);
+	compass.fillText(10*Math.round(degrees/10),100-10*((degrees-5)%10+5),40);
+	compass.fillText(10*Math.round(degrees/10)+10,200-10*((degrees-5)%10+5),40);
+	}else{
+	compass.fillText(10*Math.round(degrees/10)-10,-10*((degrees+5)%10-5),40);
+	compass.fillText(10*Math.round(degrees/10),100-10*((degrees+5)%10-5),40);
+	compass.fillText(10*Math.round(degrees/10)+10,200-10*((degrees+5)%10-5),40);
+	}
+	
+	compass.strokeStyle="#ff0000";
+	compass.beginPath();
+	compass.moveTo(100,0);
+	compass.lineTo(100,100);
+	compass.stroke();
+}
+function drawOverlay(){
+	attoverlay.strokeStyle="#00ff00";
+	attoverlay.fillStyle="#00ff00";
+	attoverlay.beginPath();
+	attoverlay.moveTo(75,100-200*Math.sin(Math.PI/9));
+	attoverlay.lineTo(125,100-200*Math.sin(Math.PI/9));
+	attoverlay.fillText("20",62,102-200*Math.sin(Math.PI/9))
+	attoverlay.fillText("20",127,102-200*Math.sin(Math.PI/9))
+	attoverlay.moveTo(85,100-200*Math.sin(3*Math.PI/36));
+	attoverlay.lineTo(115,100-200*Math.sin(3*Math.PI/36));
+	attoverlay.moveTo(75,100-200*Math.sin(Math.PI/18));
+	attoverlay.lineTo(125,100-200*Math.sin(Math.PI/18));
+	attoverlay.fillText("10",62,102-200*Math.sin(Math.PI/18))
+	attoverlay.fillText("10",127,102-200*Math.sin(Math.PI/18))
+	attoverlay.moveTo(85,100-200*Math.sin(Math.PI/36));//+5
+	attoverlay.lineTo(115,100-200*Math.sin(Math.PI/36));
+	attoverlay.moveTo(75,100);
+	attoverlay.lineTo(125,100);
+	attoverlay.moveTo(85,100+200*Math.sin(Math.PI/36));//+5
+	attoverlay.lineTo(115,100+200*Math.sin(Math.PI/36));
+	attoverlay.moveTo(75,100+200*Math.sin(Math.PI/18));//-10
+	attoverlay.lineTo(125,100+200*Math.sin(Math.PI/18));
+	attoverlay.fillText("10",62,102+200*Math.sin(Math.PI/18))
+	attoverlay.fillText("10",127,102+200*Math.sin(Math.PI/18))
+	attoverlay.moveTo(85,100+200*Math.sin(3*Math.PI/36));//-15
+	attoverlay.lineTo(115,100+200*Math.sin(3*Math.PI/36));
+	attoverlay.moveTo(75,100+200*Math.sin(Math.PI/9));
+	attoverlay.lineTo(125,100+200*Math.sin(Math.PI/9));
+	attoverlay.fillText("20",62,102+200*Math.sin(Math.PI/9))
+	attoverlay.fillText("20",127,102+200*Math.sin(Math.PI/9))
+	attoverlay.stroke();
+}
+function animate(){
+setInterval(Frame,1000/fps)
+}
+function kdown(e){
+	var event=window.event ? window.event : e;
+	if(event.keyCode===37){event.preventDefault();key.left=true}
+	if(event.keyCode===38){event.preventDefault();key.up=true}
+	if(event.keyCode===39){event.preventDefault();key.right=true}
+	if(event.keyCode===40){event.preventDefault();key.down=true}
+	if(event.keyCode===32){event.preventDefault();key.space=true}
+	if(event.keyCode===65){event.preventDefault();key.a=true}
+	if(event.keyCode===83){event.preventDefault();key.s=true}
+	if(event.keyCode===68){event.preventDefault();key.d=true}
+	if(event.keyCode===87){event.preventDefault();key.w=true}
+	if(event.keyCode===90){event.preventDefault();key.z=true}
+}
+function kup(e){
+	var event=window.event ? window.event : e;
+	if(event.keyCode===37){key.left=false}
+	if(event.keyCode===38){key.up=false}
+	if(event.keyCode===39){key.right=false}
+	if(event.keyCode===40){key.down=false}
+	if(event.keyCode===32){key.space=false}
+	if(event.keyCode===65){key.a=false}
+	if(event.keyCode===83){key.s=false}
+	if(event.keyCode===68){key.d=false}
+	if(event.keyCode===87){key.w=false}
+	if(event.keyCode===90){key.z=false}
+}
+
+function init(){
+	can=document.getElementById("can0");
+	can1=document.getElementById("can1");
+	can1_1=document.getElementById("can1_1");
+	can2=document.getElementById("can2");
+	ctx=can.getContext("2d");
+	attitude=can1.getContext("2d");
+	attoverlay=can1_1.getContext("2d");
+	compass=can2.getContext("2d");
+	can0.addEventListener("mousemove",function(){var e=window.event ? window.event:e;MX=(e.offsetX-500)/zoom;MY=(300-e.offsetY)/zoom;});
+	document.addEventListener("keydown",kdown);
+	document.addEventListener("keyup",kup);
+	for(var i=0;i<10;i++){
+		block[i]=[];
+		for(var j=0;j<10;j++){
+			block[i][j]=new Shape(20*i-100,0,20*j+50,
+			Math.ceil(Math.random()*10),Math.ceil(Math.random()*10),Math.ceil(Math.random()*10));
+		}
+	}
+	compass.textAlign="center";
+	compass.font="24px sans-serif";
+	ctx.strokeStyle="#44ffff";
+	drawOverlay();
+	animate();
+}
+
+function getPoint(p){
+	var disp=[p[0]-eye.x,p[1]-eye.y,p[2]-eye.z];
+
+	var c1=Math.cos(eye.yang);
+	var c2=Math.cos(eye.xang);
+	var c3=Math.cos(eye.zang);
+	var s1=Math.sin(eye.yang);
+	var s2=-Math.sin(eye.xang);
+	var s3=Math.sin(eye.zang);
+	/*var d=[(c1*c3+s1*s2*s3)*disp[0]+(c3*s1*s2-c1*s3)*disp[1]+c2*s1*disp[2],
+		c2*s3*disp[0]+c2*c3*disp[1]-s2*disp[2],
+		(c1*s2*s3-c3*s1)*disp[0]+(s1*s3+c1*c3*s2)*disp[1]+c1*c2*disp[2]];*/
+	var d=[(c1*c3+s1*s2*s3)*disp[0]+c2*s3*disp[1]+(c1*s2*s3-c3*s1)*disp[2],
+	(c3*s1*s2-c1*s3)*disp[0]+c2*c3*disp[1]+(s1*s3+c1*c3*s2)*disp[2],
+	c2*s1*disp[0]-s2*disp[1]+c1*c2*disp[2]];//passive Y-X'-Z" rotation, i.e. heading, pitch, roll
+	if((d[2])>0){
+	return [zoom*d[0]/d[2],zoom*d[1]/d[2]];
+	}else{
+	return [zoom*zoom*zoom*d[0],zoom*zoom*zoom*d[1]];
+	}
+}
+
+function Shape(x,y,z,width,height,depth,xang,yang,zang){
+	this.vert=[];
+	this.x=x;
+	this.y=y;
+	this.z=z;
+	this.height=height;
+	this.width=width;
+	this.depth=depth;
+	this.xvel=0;
+	this.yvel=0;
+	this.zvel=0;
+	this.xang=0;
+	this.yang=0;
+	this.zang=0;
+	
+	this.orient=function(){
+	var output;
+		for(var i=0;i<this.vert.length;i++){
+
+		output=[];
+		output[0]=this.vert[i][0];
+		output[1]=Math.cos(this.xang)*(this.vert[i][1]-this.y)-Math.sin(this.xang)*(this.vert[i][2]-this.z)+this.y;
+		output[2]=Math.sin(this.xang)*(this.vert[i][1]-this.y)+Math.cos(this.xang)*(this.vert[i][2]-this.z)+this.z;
+		this.vert[i]=output;
+		
+		output=[];
+		output[0]=Math.cos(this.yang)*(this.vert[i][0]-this.x)+Math.sin(this.yang)*(this.vert[i][2]-this.z)+this.x;		
+		output[1]=this.vert[i][1];
+		output[2]=-Math.sin(this.yang)*(this.vert[i][0]-this.x)+Math.cos(this.yang)*(this.vert[i][2]-this.z)+this.z;
+		this.vert[i]=output;
+
+		output=[];
+		output[0]=Math.cos(this.zang)*(this.vert[i][0]-this.x)-Math.sin(this.zang)*(this.vert[i][1]-this.y)+this.x;
+		output[1]=Math.sin(this.zang)*(this.vert[i][0]-this.x)+Math.cos(this.zang)*(this.vert[i][1]-this.y)+this.y;
+		output[2]=this.vert[i][2];
+		this.vert[i]=output;	
+	}
+}	
+	
+	this.update=function(){
+		this.x+=this.xvel;
+		this.y+=this.yvel;
+		this.z+=this.zvel;
+		if(this.z>=-200){
+			this.vert=[[this.x-this.width/2,this.y-this.height/2,this.z+this.depth/2],
+			[this.x+this.width/2,this.y-this.height/2,this.z+this.depth/2],
+			[this.x+this.width/2,this.y+this.height/2,this.z+this.depth/2],
+			[this.x-this.width/2,this.y+this.height/2,this.z+this.depth/2],
+			[this.x-this.width/2,this.y-this.height/2,this.z-this.depth/2],
+			[this.x+this.width/2,this.y-this.height/2,this.z-this.depth/2],
+			[this.x+this.width/2,this.y+this.height/2,this.z-this.depth/2],
+			[this.x-this.width/2,this.y+this.height/2,this.z-this.depth/2]];
+			this.orient();
+		}
+
+	}
+	this.draw=function(){
+	if(true){
+		for(var i=0;i<this.vert.length;i++){
+			points[i]=[];
+			points[i][0]=500+getPoint(this.vert[i])[0];
+			points[i][1]=300-getPoint(this.vert[i])[1];
+		}
+		ctx.beginPath()
+		ctx.moveTo(points[0][0],points[0][1]);
+		ctx.lineTo(points[1][0],points[1][1]);
+		ctx.lineTo(points[2][0],points[2][1]);
+		ctx.lineTo(points[3][0],points[3][1]);
+		ctx.lineTo(points[0][0],points[0][1]);
+		ctx.lineTo(points[4][0],points[4][1]);
+		ctx.lineTo(points[5][0],points[5][1]);
+		ctx.lineTo(points[6][0],points[6][1]);
+		ctx.lineTo(points[7][0],points[7][1]);
+		ctx.lineTo(points[4][0],points[4][1]);
+		ctx.stroke();
+		ctx.beginPath();
+		ctx.moveTo(points[1][0],points[1][1]);
+		ctx.lineTo(points[5][0],points[5][1]);
+		ctx.stroke();
+		ctx.beginPath();
+		ctx.moveTo(points[2][0],points[2][1]);
+		ctx.lineTo(points[6][0],points[6][1]);
+		ctx.stroke();
+		ctx.beginPath();
+		ctx.moveTo(points[3][0],points[3][1]);
+		ctx.lineTo(points[7][0],points[7][1]);
+		ctx.stroke();
+		}
+	}
+
+}
+
+function Frame(){		
+	if(physics){
+		if(key.up&&!key.down){
+			eye.xangvel+=Math.cos(eye.zang)*Math.PI/360;
+			eye.yangvel-=Math.sin(eye.zang)*Math.PI/360;
+		}else if(key.down){
+			eye.xangvel-=Math.cos(eye.zang)*Math.PI/360;
+			eye.yangvel+=Math.sin(eye.zang)*Math.PI/360;
+		}else{
+		}
+		if(key.left&&!key.right){
+			eye.yangvel-=Math.cos(eye.zang)*Math.PI/360;
+			eye.xangvel-=Math.sin(eye.zang)*Math.PI/360;
+		}else if(key.right){
+			eye.yangvel+=Math.cos(eye.zang)*Math.PI/360;
+			eye.xangvel+=Math.sin(eye.zang)*Math.PI/360;
+		}else{
+			
+		}
+		if(key.w){
+			if(eye.speed<=2){
+				eye.speed+=0.1;
+			}
+		}else if(key.s){
+			if(eye.speed>=-2){
+				eye.speed-=0.1;
+			}
+		}else{
+			eye.speed>=0?
+			eye.speed-=Math.min(0.05, eye.speed):
+			eye.speed+=Math.max(0.05, eye.speed);
+		}
+		if(key.a&&!key.d){
+			eye.zangvel+=Math.PI/360;
+		}else if(key.d){
+			eye.zangvel-=Math.PI/360;
+		}else{	
+		}
+	}else{
+		if(key.up&&!key.down){
+			eye.xang+=Math.cos(eye.zang)*Math.PI/100;
+			eye.yang-=Math.sin(eye.zang)*Math.PI/100;
+		}else if(key.down){
+			eye.xang-=Math.cos(eye.zang)*Math.PI/100;
+			eye.yang+=Math.sin(eye.zang)*Math.PI/100;
+		}else{
+		}
+		if(key.left&&!key.right){
+			eye.yang-=Math.cos(eye.zang)*Math.PI/120;
+			eye.xang-=Math.sin(eye.zang)*Math.PI/120;
+		}else if(key.right){
+			eye.yang+=Math.cos(eye.zang)*Math.PI/120;
+			eye.xang+=Math.sin(eye.zang)*Math.PI/120;
+		}else{
+		}
+		if(key.w){
+			if(eye.speed<=2){
+				eye.speed+=0.1;
+			}
+		}else if(key.s){
+			if(eye.speed>=-2){
+				eye.speed-=0.1;
+			}
+		}else{
+			eye.speed>=0?
+			eye.speed-=Math.min(0.05, eye.speed):
+			eye.speed+=Math.max(0.05, eye.speed);
+		}
+		
+		if(key.a&&!key.d){
+			eye.zang+=Math.PI/64;
+		}else if(key.d){
+			eye.zang-=Math.PI/64;
+		}
+		
+	}
+	eye.slowangles();
+	if(key.space){
+		eye.speed=0;
+		eye.xangvel=0;
+		eye.zangvel=0;
+		eye.yangvel=0;
+	}
+	
+	eye.move();
+	ctx.fillRect(0,0,1000,600);
+	
+	//document.getElementById("display").innerHTML=(eye.yang*180/Math.PI).toFixed(3);
+	updateAttitude();
+	updateCompass();
+	
+	for(var i=0;i<10;i++){
+		for(var j=0;j<10;j++){
+			block[i][j].update();
+			block[i][j].draw();
+		}
+	}
+}
+
+
+</script>
+</body>
+</html>
