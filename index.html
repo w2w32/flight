@@ -3,6 +3,9 @@
 <head>
 <title>Flight Sim</title>
 <style>
+body{
+color:white;
+}
 canvas{
 position:relative;
 }
@@ -14,41 +17,75 @@ position:absolute;
 z-index:-1;
 }
 #can2{
-bottom:100px;
+margin-right:-206px;
 }
 table{
-position:absolute;
+z-index:2;
+display:inline;
+position:relative;
 font-family: menlo, sans-serif;
 color:#0f0;
+bottom:150px;
+}
+#can3{
+position:absolute;
+z-index:-1;
+}
+td{
+background-color: black;
+width:99px;
+padding:0px;
+border-radius:4px;
+text-align:center;
+}
+#display_spd,#display_alt{
+height:75px;
+font-size:20px;
+}
+.check{
+vertical-align:top;
+
+padding-top:200px;
 }
 </style>
 </head>
-<body bgcolor="#000000" onload="init()">
-<canvas height="600" width="1000" id="can0" onclick=""></canvas><br>
+<body bgcolor="#222222" onload="init()">
+<canvas height="600" width="1000" id="can0" onclick=""></canvas>
+
+<br>
 <canvas height="200" width="200" id="can1"></canvas>
+
 <canvas height="200" width="200" id="can1_1"></canvas>
 <canvas height="100" width="200" id="can2"></canvas>
-<!--<table>
-<tr><td>Speed</td><td id="display_spd"></td></tr>
-<tr><td>Altitude</td><td id="display_alt"></td></tr>
+
+<table>
+<tr><td id="display_spd">-</td><td id="display_alt">-</td></tr>
+<tr><td>Speed</td><td>Altitude</td></tr>
 <tr></tr>
-</table>-->
+</table>
+<span class="check">
+Accelerated controls:
+<input class="check" type="checkbox" onchange="accelerated=this.checked"/></span>
+
+<canvas height="200" width="200" id="can3"></canvas>
+<canvas height="200" width="200" id="can3_1"></canvas>
+
 <span id="display"></span>
 <script type="text/javascript">
-var can,can1,can1_1,can2;
+var can,can1,can1_1,can2,can3,can3_1;
 var ctx,attitude,attoverlay,compass;
 var points=[];
 var block=[];
 var key={up:false,down:false,left:false,right:false,space:false,a:false,s:false,w:false,z:false};
 
-var physics=false;
+var accelerated=false;
 
 var fps=20;
-var renderdist=1000;
+var renderdist=200;
 var attitudefov=Math.PI/3;
 
 
-var eye={x:0,y:10,z:2,speed:0,
+var eye={x:200,y:20,z:0,speed:0,
 xang:0,yang:0,zang:0,
 xangvel:0,yangvel:0,zangvel:0,
 move(){
@@ -58,6 +95,11 @@ move(){
 	this.xang=anglemod(this.xang);
 	this.yang=anglemod(this.yang);
 	this.zang=anglemod(this.zang);
+	if(Math.abs(this.xang)>Math.PI/2&&0){
+	this.xang=Math.sign(this.xang)*(Math.PI-Math.abs(this.xang));
+	this.yang-=(Math.sign(this.yang)||1)*Math.PI;
+	this.zang-=(Math.sign(this.zang)||1)*Math.PI;
+	}
 	this.x+=this.speed*Math.sin(this.yang)*Math.cos(this.xang);
 	this.y+=this.speed*Math.sin(this.xang);
 	this.z+=this.speed*Math.cos(this.yang)*Math.cos(this.xang);
@@ -80,8 +122,8 @@ var MX,MY;
 
 var diag=[];
 
-function anglemod(a){//returns angle between -pi and pi
-return((a+Math.PI)%(2*Math.PI)-Math.PI*Math.sign(a+Math.PI));
+function anglemod(a){//returns angle in [-pi,pi)
+return ((a+Math.PI)%(2*Math.PI)-Math.PI*(Math.sign(a+Math.PI)||1));
 }
 function updateAttitude(){
 	attitude.clearRect(0,0,200,200);
@@ -231,10 +273,10 @@ function init(){
 	can0.addEventListener("mousemove",function(){var e=window.event ? window.event:e;MX=(e.offsetX-500)/zoom;MY=(300-e.offsetY)/zoom;});
 	document.addEventListener("keydown",kdown);
 	document.addEventListener("keyup",kup);
-	for(var i=0;i<10;i++){
+	for(var i=0;i<100;i++){
 		block[i]=[];
-		for(var j=0;j<10;j++){
-			block[i][j]=new Shape(20*i-100,0,20*j+50,
+		for(var j=0;j<100;j++){
+			block[i][j]=new Shape(20*i-100+Math.random()*10,0,20*j+50+Math.random()*10,
 			Math.ceil(Math.random()*10),Math.ceil(Math.random()*10),Math.ceil(Math.random()*10));
 		}
 	}
@@ -360,7 +402,7 @@ function Shape(x,y,z,width,height,depth,xang,yang,zang){
 }
 
 function Frame(){		
-	if(physics){
+	if(accelerated){
 		if(key.up&&!key.down){
 			eye.xangvel+=Math.cos(eye.zang)*Math.PI/360;
 			eye.yangvel-=Math.sin(eye.zang)*Math.PI/360;
@@ -370,21 +412,21 @@ function Frame(){
 		}else{
 		}
 		if(key.left&&!key.right){
-			eye.yangvel-=Math.cos(eye.zang)*Math.PI/360;
-			eye.xangvel-=Math.sin(eye.zang)*Math.PI/360;
+			eye.yangvel-=Math.cos(eye.zang)*Math.PI/720;
+			eye.xangvel-=Math.sin(eye.zang)*Math.PI/720;
 		}else if(key.right){
-			eye.yangvel+=Math.cos(eye.zang)*Math.PI/360;
-			eye.xangvel+=Math.sin(eye.zang)*Math.PI/360;
+			eye.yangvel+=Math.cos(eye.zang)*Math.PI/720;
+			eye.xangvel+=Math.sin(eye.zang)*Math.PI/720;
 		}else{
 			
 		}
 		if(key.w){
-			if(eye.speed<=2){
-				eye.speed+=0.1;
+			if(eye.speed<=5){
+				eye.speed+=eye.speed<0?0.2:0.1;
 			}
 		}else if(key.s){
-			if(eye.speed>=-2){
-				eye.speed-=0.1;
+			if(eye.speed>=-5){
+				eye.speed-=eye.speed>0?0.2:0.1;
 			}
 		}else{
 			eye.speed>=0?
@@ -393,8 +435,12 @@ function Frame(){
 		}
 		if(key.a&&!key.d){
 			eye.zangvel+=Math.PI/360;
+			//eye.zangvel+=Math.cos(eye.xang)*Math.PI/360;
+			//eye.yangvel+=Math.sin(eye.xang)*Math.PI/360;
 		}else if(key.d){
 			eye.zangvel-=Math.PI/360;
+			//eye.zangvel-=Math.cos(eye.xang)*Math.PI/360;
+			//eye.yangvel-=Math.sin(eye.xang)*Math.PI/360;
 		}else{	
 		}
 	}else{
@@ -409,29 +455,33 @@ function Frame(){
 		if(key.left&&!key.right){
 			eye.yang-=Math.cos(eye.zang)*Math.PI/120;
 			eye.xang-=Math.sin(eye.zang)*Math.PI/120;
+			//eye.zang+=Math.sin(eye.xang)*Math.PI/120;
 		}else if(key.right){
 			eye.yang+=Math.cos(eye.zang)*Math.PI/120;
 			eye.xang+=Math.sin(eye.zang)*Math.PI/120;
+			//eye.zang-=Math.sin(eye.xang)*Math.PI/120;
 		}else{
 		}
 		if(key.w){
 			if(eye.speed<=2){
-				eye.speed+=0.1;
+				eye.speed=4;
 			}
 		}else if(key.s){
 			if(eye.speed>=-2){
-				eye.speed-=0.1;
+				eye.speed=-4;
 			}
 		}else{
-			eye.speed>=0?
-			eye.speed-=Math.min(0.05, eye.speed):
-			eye.speed+=Math.max(0.05, eye.speed);
+			eye.speed=0;
 		}
 		
 		if(key.a&&!key.d){
 			eye.zang+=Math.PI/64;
+			//eye.zang+=Math.cos(eye.xang)*Math.PI/64;
+			//eye.yang+=Math.sin(eye.xang)*Math.PI/64;
 		}else if(key.d){
 			eye.zang-=Math.PI/64;
+			//eye.zang-=Math.cos(eye.xang)*Math.PI/64;
+			//eye.yang-=Math.sin(eye.xang)*Math.PI/64;
 		}
 		
 	}
@@ -447,13 +497,18 @@ function Frame(){
 	ctx.fillRect(0,0,1000,600);
 	
 	//document.getElementById("display").innerHTML=(eye.yang*180/Math.PI).toFixed(3);
+	document.getElementById("display_spd").innerHTML=eye.speed.toFixed(2);
+	document.getElementById("display_alt").innerHTML=eye.y.toFixed(2);
+
 	updateAttitude();
 	updateCompass();
 	
-	for(var i=0;i<10;i++){
-		for(var j=0;j<10;j++){
+	for(var i=0;i<block.length;i++){
+		for(var j=0;j<block[i].length;j++){
+			if(Math.sqrt((block[i][j].x-eye.x)*(block[i][j].x-eye.x)+(block[i][j].z-eye.z)*(block[i][j].z-eye.z))<renderdist){
 			block[i][j].update();
 			block[i][j].draw();
+			}
 		}
 	}
 }
